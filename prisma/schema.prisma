@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model MezmurCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  mezmurs     Mezmur[]
+}
+
+model Mezmur {
+  id                 Int            @id @default(autoincrement())
+  title              String
+  description        String?
+  categoryId         Int
+  thumbnailUrl       String?
+  thumbnailStorageId String?
+  mezmurPoem         String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  category           MezmurCategory @relation(fields: [categoryId], references: [id])
+}
