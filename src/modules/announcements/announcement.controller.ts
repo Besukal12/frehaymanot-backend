@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getAuth } from "@clerk/express";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
 import cloudinary from "../../config/cloudinary.js";
 import {
@@ -12,11 +13,49 @@ import {
 } from "./announcement.schema.js";
 import { isAdminRole } from "../../middleware/auth.middleware.js";
 
-function generateSlug(title: string) {
-  return title.trim().toLowerCase().replace(/\s+/g, "-");
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+const publicAnnouncementSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  content: true,
+  thumbnailUrl: true,
+  postedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+function generateSlug(title: string): string | null {
+  const slug = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || null;
+}
+
+function parsePositiveQueryInteger(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function destroyThumbnail(publicId: string) {
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    console.error(`Failed to clean up Cloudinary thumbnail ${publicId}`, error);
+  }
 }
 
 export async function addAnnouncement(req: Request, res: Response) {
+  let uploadedThumbnailId: string | undefined;
+
   try {
     const { userId } = getAuth(req);
 
@@ -39,6 +78,12 @@ export async function addAnnouncement(req: Request, res: Response) {
 
     const slug = providedSlug ?? generateSlug(title);
 
+    if (!slug) {
+      return res.status(400).json({
+        message: "Title must contain at least one letter or number",
+      });
+    }
+
     const files = req.files as
       | { thumbnail?: Express.Multer.File[] }
       | undefined;
@@ -51,7 +96,7 @@ export async function addAnnouncement(req: Request, res: Response) {
     if (thumbnail) {
       const isValid = await validateFileType(thumbnail.buffer);
 
-      if (!isValid || !thumbnail.mimetype.startsWith("image/")) {
+      if (!isValid.startsWith("image/")) {
         return res.status(400).json({
           message: "Invalid thumbnail file",
         });
@@ -61,6 +106,7 @@ export async function addAnnouncement(req: Request, res: Response) {
 
       thumbnailUrl = uploaded.secure_url;
       thumbnailStorageId = uploaded.public_id;
+      uploadedThumbnailId = uploaded.public_id;
     }
 
     const announcement = await prisma.announcement.create({
@@ -80,6 +126,19 @@ export async function addAnnouncement(req: Request, res: Response) {
       announcement,
     });
   } catch (error) {
+    if (uploadedThumbnailId) {
+      await destroyThumbnail(uploadedThumbnailId);
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return res.status(409).json({
+        message: "An announcement with this slug already exists",
+      });
+    }
+
     console.error(error);
 
     return res.status(500).json({
@@ -90,14 +149,43 @@ export async function addAnnouncement(req: Request, res: Response) {
 
 export async function getAnnouncements(req: Request, res: Response) {
   try {
+    const page =
+      req.query.page === undefined
+        ? 1
+        : parsePositiveQueryInteger(req.query.page);
+    const pageSize =
+      req.query.pageSize === undefined
+        ? DEFAULT_PAGE_SIZE
+        : parsePositiveQueryInteger(req.query.pageSize);
+
+    if (page === null || pageSize === null || pageSize > MAX_PAGE_SIZE) {
+      return res.status(400).json({
+        message: `page must be a positive integer and pageSize must be between 1 and ${MAX_PAGE_SIZE}`,
+      });
+    }
+
+    const skip = (page - 1) * pageSize;
+
+    if (!Number.isSafeInteger(skip)) {
+      return res.status(400).json({
+        message: "page is too large",
+      });
+    }
+
     const announcements = await prisma.announcement.findMany({
-      orderBy: {
-        postedAt: "desc",
-      },
+      orderBy: [{ postedAt: "desc" }, { id: "desc" }],
+      skip,
+      take: pageSize,
+      select: publicAnnouncementSelect,
     });
 
     return res.status(200).json({
       announcements,
+      pagination: {
+        page,
+        pageSize,
+        hasMore: announcements.length === pageSize,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -120,6 +208,7 @@ export async function getAnnouncementById(req: Request, res: Response) {
 
     const announcement = await prisma.announcement.findUnique({
       where: { id },
+      select: publicAnnouncementSelect,
     });
 
     if (!announcement) {
@@ -141,6 +230,8 @@ export async function getAnnouncementById(req: Request, res: Response) {
 }
 
 export async function updateAnnouncement(req: Request, res: Response) {
+  let newThumbnailId: string | undefined;
+
   try {
     const { userId, orgRole } = getAuth(req);
 
@@ -183,7 +274,7 @@ export async function updateAnnouncement(req: Request, res: Response) {
       });
     }
 
-    const { title, content, postedAt } = result.data;
+    const { title, slug, content, postedAt } = result.data;
 
     const updateData: {
       title?: string;
@@ -196,7 +287,20 @@ export async function updateAnnouncement(req: Request, res: Response) {
 
     if (title !== undefined) {
       updateData.title = title;
-      updateData.slug = generateSlug(title);
+    }
+
+    if (slug !== undefined) {
+      updateData.slug = slug;
+    } else if (title !== undefined) {
+      const generatedSlug = generateSlug(title);
+
+      if (!generatedSlug) {
+        return res.status(400).json({
+          message: "Title must contain at least one letter or number",
+        });
+      }
+
+      updateData.slug = generatedSlug;
     }
 
     if (content !== undefined) {
@@ -213,12 +317,10 @@ export async function updateAnnouncement(req: Request, res: Response) {
 
     const thumbnail = files?.thumbnail?.[0];
 
-    let newThumbnailId: string | undefined;
-
     if (thumbnail) {
       const isValid = await validateFileType(thumbnail.buffer);
 
-      if (!isValid || !thumbnail.mimetype.startsWith("image/")) {
+      if (!isValid.startsWith("image/")) {
         return res.status(400).json({
           message: "Invalid thumbnail file",
         });
@@ -238,7 +340,7 @@ export async function updateAnnouncement(req: Request, res: Response) {
     });
 
     if (newThumbnailId && announcement.thumbnailStorageId) {
-      await cloudinary.uploader.destroy(announcement.thumbnailStorageId);
+      await destroyThumbnail(announcement.thumbnailStorageId);
     }
 
     return res.status(200).json({
@@ -246,6 +348,10 @@ export async function updateAnnouncement(req: Request, res: Response) {
       announcement: updatedAnnouncement,
     });
   } catch (error) {
+    if (newThumbnailId) {
+      await destroyThumbnail(newThumbnailId);
+    }
+
     console.error(error);
 
     return res.status(500).json({
@@ -288,13 +394,13 @@ export async function deleteAnnouncement(req: Request, res: Response) {
       });
     }
 
-    if (announcement.thumbnailStorageId) {
-      await cloudinary.uploader.destroy(announcement.thumbnailStorageId);
-    }
-
     await prisma.announcement.delete({
       where: { id },
     });
+
+    if (announcement.thumbnailStorageId) {
+      await destroyThumbnail(announcement.thumbnailStorageId);
+    }
 
     return res.status(200).json({
       message: "Announcement deleted successfully",
