@@ -33,3 +33,39 @@ model Mezmur {
   updatedAt          DateTime       @updatedAt
   category           MezmurCategory @relation(fields: [categoryId], references: [id])
 }
+
+model Course {
+  id                 Int      @id @default(autoincrement())
+  title              String
+  description        String?
+  grade              Int
+  categoryId         Int
+  thumbnailUrl       String?
+  thumbnailStorageId String?
+  pdfUrl             String?
+  pdfStorageId       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Announcement {
+  id                 Int      @id @default(autoincrement())
+  title              String
+  slug               String   @unique
+  content            String
+  thumbnailUrl       String?
+  thumbnailStorageId String?
+  uploadedById       String
+  postedAt           DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
