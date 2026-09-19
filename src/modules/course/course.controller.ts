@@ -10,7 +10,35 @@ import { CourseCategorySchema, CourseSchema } from "./course.schema.js";
 import { isAdminRole } from "../../middleware/auth.middleware.js";
 import { parsePositiveInt } from "../../lib/ids.js";
 
+const publicCourseSelect = {
+  id: true,
+  title: true,
+  description: true,
+  grade: true,
+  categoryId: true,
+  thumbnailUrl: true,
+  pdfUrl: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+async function destroyCourseAsset(
+  publicId: string,
+  resourceType: "image" | "raw",
+) {
+  try {
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType,
+    });
+  } catch (error) {
+    console.error(`Failed to clean up Cloudinary asset ${publicId}`, error);
+  }
+}
+
 export async function addCourse(req: Request, res: Response) {
+  let uploadedThumbnailId: string | undefined;
+  let uploadedPdfId: string | undefined;
+
   try {
     const { userId } = getAuth(req);
 
@@ -65,10 +93,13 @@ export async function addCourse(req: Request, res: Response) {
       thumbnailType,
       { filename: thumbnail.originalname },
     );
+    uploadedThumbnailId = uploadedThumbnail.public_id;
 
     const uploadedPdf = await uploadToCloudinary(pdf.buffer, pdfType, {
       filename: pdf.originalname,
     });
+
+    uploadedPdfId = uploadedPdf.public_id;
 
     const newCourse = await prisma.course.create({
       data: {
@@ -92,6 +123,13 @@ export async function addCourse(req: Request, res: Response) {
       course: newCourse,
     });
   } catch (error) {
+    if (uploadedThumbnailId) {
+      await destroyCourseAsset(uploadedThumbnailId, "image");
+    }
+    if (uploadedPdfId) {
+      await destroyCourseAsset(uploadedPdfId, "raw");
+    }
+
     console.error("Add course error:", error);
 
     return res.status(500).json({
@@ -102,11 +140,14 @@ export async function addCourse(req: Request, res: Response) {
 
 export async function getCourse(req: Request, res: Response) {
   try {
-    const course = await prisma.course.findMany();
+    const courses = await prisma.course.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: publicCourseSelect,
+    });
 
     return res.status(200).json({
       message: "Courses retrieved successfully",
-      courses: course,
+      courses,
     });
   } catch (error) {
     console.error("Get course error:", error);
@@ -130,6 +171,7 @@ export async function getCourseById(req: Request, res: Response) {
       where: {
         id: courseId,
       },
+      select: publicCourseSelect,
     });
 
     if (!course) {
@@ -160,11 +202,10 @@ export async function deleteCourse(req: Request, res: Response) {
       });
     }
 
-    const { id } = req.params;
-    const courseId = Number(id);
+    const courseId = parsePositiveInt(req.params.id);
 
-    if (!Number.isInteger(courseId) || courseId <= 0) {
-      return res.status(404).json({
+    if (!courseId) {
+      return res.status(400).json({
         message: "Invalid course ID",
       });
     }
@@ -190,23 +231,19 @@ export async function deleteCourse(req: Request, res: Response) {
       });
     }
 
-    if (course.thumbnailStorageId) {
-      await cloudinary.uploader.destroy(course.thumbnailStorageId, {
-        resource_type: "image",
-      });
-    }
-
-    if (course.pdfStorageId) {
-      await cloudinary.uploader.destroy(course.pdfStorageId, {
-        resource_type: "raw",
-      });
-    }
-
     await prisma.course.delete({
       where: {
         id: courseId,
       },
     });
+
+    if (course.thumbnailStorageId) {
+      await destroyCourseAsset(course.thumbnailStorageId, "image");
+    }
+
+    if (course.pdfStorageId) {
+      await destroyCourseAsset(course.pdfStorageId, "raw");
+    }
 
     return res.status(200).json({
       message: "Course deleted successfully",
@@ -222,6 +259,9 @@ export async function deleteCourse(req: Request, res: Response) {
 }
 
 export async function updateCourse(req: Request, res: Response) {
+  let newThumbnailId: string | undefined;
+  let newPdfId: string | undefined;
+
   try {
     const { userId, orgRole } = getAuth(req);
 
@@ -231,11 +271,10 @@ export async function updateCourse(req: Request, res: Response) {
       });
     }
 
-    const { id } = req.params;
-    const courseId = Number(id);
+    const courseId = parsePositiveInt(req.params.id);
 
-    if (!Number.isInteger(courseId) || courseId <= 0) {
-      return res.status(404).json({
+    if (!courseId) {
+      return res.status(400).json({
         message: "Invalid course ID",
       });
     }
@@ -270,7 +309,7 @@ export async function updateCourse(req: Request, res: Response) {
       });
     }
 
-    const { title, description, grade } = safeData.data;
+    const { title, description, grade, categoryId } = safeData.data;
 
     const files = (req.files ?? {}) as {
       thumbnail?: Express.Multer.File[];
@@ -284,6 +323,7 @@ export async function updateCourse(req: Request, res: Response) {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
       ...(grade !== undefined && { grade }),
+      ...(categoryId !== undefined && { categoryId }),
     };
 
     let oldThumbnailStorageId: string | null = null;
@@ -306,6 +346,7 @@ export async function updateCourse(req: Request, res: Response) {
 
       updateData.thumbnailUrl = uploadedThumbnail.secure_url;
       updateData.thumbnailStorageId = uploadedThumbnail.public_id;
+      newThumbnailId = uploadedThumbnail.public_id;
       oldThumbnailStorageId = course.thumbnailStorageId;
     }
 
@@ -324,6 +365,7 @@ export async function updateCourse(req: Request, res: Response) {
 
       updateData.pdfUrl = uploadedPdf.secure_url;
       updateData.pdfStorageId = uploadedPdf.public_id;
+      newPdfId = uploadedPdf.public_id;
       oldPdfStorageId = course.pdfStorageId;
     }
 
@@ -336,15 +378,11 @@ export async function updateCourse(req: Request, res: Response) {
 
     // Clean up old files only after the DB write succeeds
     if (oldThumbnailStorageId) {
-      await cloudinary.uploader.destroy(oldThumbnailStorageId, {
-        resource_type: "image",
-      });
+      await destroyCourseAsset(oldThumbnailStorageId, "image");
     }
 
     if (oldPdfStorageId) {
-      await cloudinary.uploader.destroy(oldPdfStorageId, {
-        resource_type: "raw",
-      });
+      await destroyCourseAsset(oldPdfStorageId, "raw");
     }
 
     return res.status(200).json({
@@ -352,6 +390,13 @@ export async function updateCourse(req: Request, res: Response) {
       course: updatedCourse,
     });
   } catch (error) {
+    if (newThumbnailId) {
+      await destroyCourseAsset(newThumbnailId, "image");
+    }
+    if (newPdfId) {
+      await destroyCourseAsset(newPdfId, "raw");
+    }
+
     console.error("Update Course error:", error);
 
     return res.status(500).json({
