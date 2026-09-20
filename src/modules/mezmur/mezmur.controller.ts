@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getAuth } from "@clerk/express";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
 import cloudinary from "../../config/cloudinary.js";
 import {
@@ -250,6 +251,13 @@ export async function deleteMezmur(req: Request, res: Response) {
       mezmur,
     });
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return res.status(404).json({ message: "Mezmur not found" });
+    }
+
     console.error("Delete mezmur error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
