@@ -24,17 +24,22 @@ vi.mock("@clerk/express", () => ({
   }),
 }));
 
-vi.mock("../../src/middleware/upload/uploadToCloudinary.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../src/middleware/uploadToCloudinary.js")>();
-  return {
-    ...actual,
-    uploadToCloudinary: vi.fn(async () => ({
-      secure_url: "https://res.cloudinary.com/test/image/upload/v1/test.jpg",
-      public_id: "frehaymanot/test-id",
-    })),
-  };
-});
+vi.mock(
+  "../../src/middleware/uploadToCloudinary.js",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../src/middleware/uploadToCloudinary.js")
+      >();
+    return {
+      ...actual,
+      uploadToCloudinary: vi.fn(async () => ({
+        secure_url: "https://res.cloudinary.com/test/image/upload/v1/test.jpg",
+        public_id: "frehaymanot/test-id",
+      })),
+    };
+  },
+);
 
 vi.mock("../../src/config/cloudinary.js", () => ({
   default: {
