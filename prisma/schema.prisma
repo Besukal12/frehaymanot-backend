@@ -30,6 +30,7 @@ model Mezmur {
   thumbnailStorageId String?
   mezmurPoem         String
   createdAt          DateTime       @default(now())
+  uploadedBy         String
   updatedAt          DateTime       @updatedAt
   category           MezmurCategory @relation(fields: [categoryId], references: [id])
 }
@@ -44,6 +45,7 @@ model Course {
   thumbnailStorageId String?
   pdfUrl             String?
   pdfStorageId       String?
+  uploadedBy         String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -57,6 +59,7 @@ model Announcement {
   thumbnailStorageId String?
   uploadedById       String
   postedAt           DateTime @default(now())
+  uploadedBy         String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

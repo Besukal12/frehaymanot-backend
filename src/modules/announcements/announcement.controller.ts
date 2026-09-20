@@ -118,6 +118,7 @@ export async function addAnnouncement(req: Request, res: Response) {
         thumbnailUrl,
         thumbnailStorageId,
         uploadedById: userId,
+        uploadedBy: userId,
       },
     });
 
