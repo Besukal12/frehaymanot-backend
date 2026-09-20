@@ -328,19 +328,33 @@ export async function updateCourse(req: Request, res: Response) {
 
     let oldThumbnailStorageId: string | null = null;
     let oldPdfStorageId: string | null = null;
+    let thumbnailType: string | undefined;
+    let pdfType: string | undefined;
 
     if (thumbnail) {
-      const thumbnailType = await validateFileType(thumbnail.buffer);
+      thumbnailType = await validateFileType(thumbnail.buffer);
 
       if (!thumbnailType.startsWith("image/")) {
         return res.status(400).json({
           message: "Thumbnail must be an image",
         });
       }
+    }
 
+    if (pdf) {
+      pdfType = await validateFileType(pdf.buffer);
+
+      if (pdfType !== "application/pdf") {
+        return res.status(400).json({
+          message: "File must be a PDF",
+        });
+      }
+    }
+
+    if (thumbnail) {
       const uploadedThumbnail = await uploadToCloudinary(
         thumbnail.buffer,
-        thumbnailType,
+        thumbnailType!,
         { filename: thumbnail.originalname },
       );
 
@@ -351,15 +365,7 @@ export async function updateCourse(req: Request, res: Response) {
     }
 
     if (pdf) {
-      const pdfType = await validateFileType(pdf.buffer);
-
-      if (pdfType !== "application/pdf") {
-        return res.status(400).json({
-          message: "File must be a PDF",
-        });
-      }
-
-      const uploadedPdf = await uploadToCloudinary(pdf.buffer, pdfType, {
+      const uploadedPdf = await uploadToCloudinary(pdf.buffer, pdfType!, {
         filename: pdf.originalname,
       });
 
