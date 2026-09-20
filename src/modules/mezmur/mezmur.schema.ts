@@ -6,3 +6,8 @@ export const MezmurSchema = z.object({
   categoryId: z.coerce.number().int().positive(),
   mezmurPoem: z.string().trim().min(1),
 });
+
+export const MezmurCategorySchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
+});

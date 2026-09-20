@@ -6,7 +6,7 @@ import { setAuth } from "../helpers/auth.js";
 
 describe("Announcements", () => {
   it("rejects unauthenticated create", async () => {
-    const res = await request(app).post("/api/announcement/create").send({
+    const res = await request(app).post("/api/announcements").send({
       title: "Hello",
       content: "Welcome",
     });
@@ -16,7 +16,7 @@ describe("Announcements", () => {
 
   it("rejects invalid payloads", async () => {
     setAuth("owner_1");
-    const res = await request(app).post("/api/announcement/create").send({
+    const res = await request(app).post("/api/announcements").send({
       title: " ",
       content: "",
     });
@@ -26,7 +26,7 @@ describe("Announcements", () => {
 
   it("creates with a generated slug and lists announcements", async () => {
     setAuth("owner_1");
-    const created = await request(app).post("/api/announcement/create").send({
+    const created = await request(app).post("/api/announcements").send({
       title: "New Semester",
       content: "Classes begin Monday",
     });
@@ -39,14 +39,14 @@ describe("Announcements", () => {
       }),
     ).not.toBeNull();
 
-    const list = await request(app).get("/api/announcement/get");
+    const list = await request(app).get("/api/announcements");
     expect(list.status).toBe(200);
     expect(list.body.announcements).toHaveLength(1);
   });
 
   it("enforces owner/admin authorization on update and delete", async () => {
     setAuth("owner_1");
-    const created = await request(app).post("/api/announcement/create").send({
+    const created = await request(app).post("/api/announcements").send({
       title: "Keep",
       slug: "keep-me",
       content: "Original",
@@ -55,35 +55,39 @@ describe("Announcements", () => {
 
     setAuth("intruder");
     const forbidden = await request(app)
-      .patch(`/api/announcement/update/${id}`)
+      .patch(`/api/announcements/${id}`)
       .send({ content: "Hacked" });
     expect(forbidden.status).toBe(403);
     expect(
       (await prisma.announcement.findUnique({ where: { id } }))?.content,
     ).toBe("Original");
 
-    expect((await request(app).delete(`/api/announcement/delete/${id}`)).status).toBe(
+    expect((await request(app).delete(`/api/announcements/${id}`)).status).toBe(
       403,
     );
-    expect(await prisma.announcement.findUnique({ where: { id } })).not.toBeNull();
+    expect(
+      await prisma.announcement.findUnique({ where: { id } }),
+    ).not.toBeNull();
 
     setAuth("admin_1", "org:admin");
     const updated = await request(app)
-      .patch(`/api/announcement/update/${id}`)
+      .patch(`/api/announcements/${id}`)
       .send({ content: "Revised" });
     expect(updated.status).toBe(200);
     expect(
       (await prisma.announcement.findUnique({ where: { id } }))?.content,
     ).toBe("Revised");
 
-    const deleted = await request(app).delete(`/api/announcement/delete/${id}`);
+    const deleted = await request(app).delete(`/api/announcements/${id}`);
     expect(deleted.status).toBe(200);
     expect(await prisma.announcement.findUnique({ where: { id } })).toBeNull();
   });
 
   it("returns 400/404 for invalid and missing ids", async () => {
     setAuth("owner_1");
-    expect((await request(app).get("/api/announcement/get/abc")).status).toBe(400);
-    expect((await request(app).get("/api/announcement/get/9999")).status).toBe(404);
+    expect((await request(app).get("/api/announcements/abc")).status).toBe(400);
+    expect((await request(app).get("/api/announcements/9999")).status).toBe(
+      404,
+    );
   });
 });

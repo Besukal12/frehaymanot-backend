@@ -10,7 +10,7 @@ describe("Course resources", () => {
     setAuth(null);
 
     const res = await request(app)
-      .post("/api/course/create")
+      .post("/api/course")
       .field("title", "Intro")
       .field("grade", "5")
       .attach("thumbnail", PNG_BYTES, {
@@ -29,14 +29,14 @@ describe("Course resources", () => {
   it("rejects invalid grade and missing files", async () => {
     setAuth("owner_1");
 
-    const invalidGrade = await request(app).post("/api/course/create").send({
+    const invalidGrade = await request(app).post("/api/course").send({
       title: "Intro",
       grade: 99,
     });
     expect(invalidGrade.status).toBe(400);
 
     const missingFiles = await request(app)
-      .post("/api/course/create")
+      .post("/api/course")
       .field("title", "Intro")
       .field("grade", "5");
     expect(missingFiles.status).toBe(400);
@@ -47,7 +47,7 @@ describe("Course resources", () => {
     setAuth("owner_1");
 
     const created = await request(app)
-      .post("/api/course/create")
+      .post("/api/course")
       .field("title", "Dogma")
       .field("grade", "7")
       .attach("thumbnail", PNG_BYTES, {
@@ -63,20 +63,20 @@ describe("Course resources", () => {
     const id = created.body.course.id as number;
     expect(await prisma.course.findUnique({ where: { id } })).not.toBeNull();
 
-    const listed = await request(app).get("/api/course/get");
+    const listed = await request(app).get("/api/course");
     expect(listed.status).toBe(200);
     expect(listed.body.courses).toHaveLength(1);
 
-    const byId = await request(app).get(`/api/course/get/${id}`);
+    const byId = await request(app).get(`/api/course/${id}`);
     expect(byId.status).toBe(200);
     expect(byId.body.course.title).toBe("Dogma");
 
-    expect((await request(app).get("/api/course/get/abc")).status).toBe(400);
-    expect((await request(app).get("/api/course/get/9999")).status).toBe(404);
+    expect((await request(app).get("/api/course/abc")).status).toBe(400);
+    expect((await request(app).get("/api/course/9999")).status).toBe(404);
 
     setAuth("intruder");
     const forbidden = await request(app)
-      .patch(`/api/course/update/${id}`)
+      .patch(`/api/course/${id}`)
       .field("title", "Hacked");
     expect(forbidden.status).toBe(403);
     expect((await prisma.course.findUnique({ where: { id } }))?.title).toBe(
@@ -85,12 +85,12 @@ describe("Course resources", () => {
 
     setAuth("admin_1", "admin");
     const updated = await request(app)
-      .patch(`/api/course/update/${id}`)
+      .patch(`/api/course/${id}`)
       .field("title", "Updated dogma");
     expect(updated.status).toBe(200);
     expect(updated.body.course.title).toBe("Updated dogma");
 
-    const deleted = await request(app).delete(`/api/course/delete/${id}`);
+    const deleted = await request(app).delete(`/api/course/${id}`);
     expect(deleted.status).toBe(200);
     expect(await prisma.course.findUnique({ where: { id } })).toBeNull();
   });

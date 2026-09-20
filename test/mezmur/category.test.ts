@@ -5,7 +5,7 @@ import { prisma } from "../setup.js";
 import { setAuth } from "../helpers/auth.js";
 
 describe("Mezmur categories", () => {
-  const endpoint = "/api/mezmur/categories-add";
+  const endpoint = "/api/mezmur/categories";
 
   it("rejects unauthenticated create", async () => {
     const res = await request(app).post(endpoint).send({
@@ -31,7 +31,7 @@ describe("Mezmur categories", () => {
   });
 
   it("creates a category and persists it", async () => {
-    setAuth("user_1");
+    setAuth("user_1", "org:admin");
     const payload = { name: "Fasika", description: "Easter hymns" };
     const res = await request(app).post(endpoint).send(payload);
 
@@ -46,24 +46,24 @@ describe("Mezmur categories", () => {
   });
 
   it("lists categories including empty state", async () => {
-    const empty = await request(app).get("/api/mezmur/categories-get");
+    const empty = await request(app).get("/api/mezmur/categories");
     expect(empty.status).toBe(200);
     expect(empty.body.categories).toEqual([]);
 
-    setAuth("user_1");
+    setAuth("user_1", "org:admin");
     await request(app).post(endpoint).send({
       name: "Kidase",
       description: "Liturgy",
     });
 
-    const list = await request(app).get("/api/mezmur/categories-get");
+    const list = await request(app).get("/api/mezmur/categories");
     expect(list.status).toBe(200);
     expect(list.body.categories).toHaveLength(1);
-    expect(list.body.categories[0]._count.Mezmurs).toBe(0);
+    expect(list.body.categories[0]._count.mezmurs).toBe(0);
   });
 
   it("updates an existing category", async () => {
-    setAuth("user_1");
+    setAuth("user_1", "org:admin");
     const created = await request(app).post(endpoint).send({
       name: "Old",
       description: "Old desc",
@@ -71,7 +71,7 @@ describe("Mezmur categories", () => {
     const id = created.body.category.id;
 
     const updated = await request(app)
-      .patch(`/api/mezmur/categories-update/${id}`)
+      .patch(`/api/mezmur/categories/${id}`)
       .send({ name: "New" });
 
     expect(updated.status).toBe(200);
@@ -82,20 +82,20 @@ describe("Mezmur categories", () => {
   });
 
   it("returns 404 for missing and invalid category ids", async () => {
-    setAuth("user_1");
+    setAuth("user_1", "org:admin");
     const missing = await request(app)
-      .patch("/api/mezmur/categories-update/9999")
+      .patch("/api/mezmur/categories/9999")
       .send({ name: "Nope" });
     expect(missing.status).toBe(404);
 
     const invalid = await request(app)
-      .delete("/api/mezmur/categories-delete/abc")
+      .delete("/api/mezmur/categories/abc")
       .send();
-    expect(invalid.status).toBe(404);
+    expect(invalid.status).toBe(400);
   });
 
   it("deletes a category and removes it from the database", async () => {
-    setAuth("user_1");
+    setAuth("user_1", "org:admin");
     const created = await request(app).post(endpoint).send({
       name: "Temp",
       description: "To delete",
@@ -103,7 +103,7 @@ describe("Mezmur categories", () => {
     const id = created.body.category.id;
 
     const deleted = await request(app).delete(
-      `/api/mezmur/categories-delete/${id}`,
+      `/api/mezmur/categories/${id}`,
     );
     expect(deleted.status).toBe(200);
     expect(await prisma.mezmurCategory.findUnique({ where: { id } })).toBeNull();
