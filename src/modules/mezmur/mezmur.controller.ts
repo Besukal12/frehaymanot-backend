@@ -69,6 +69,14 @@ export async function addMezmur(req: Request, res: Response) {
       });
     }
 
+    const category = await prisma.mezmurCategory.findUnique({
+      where: { id: parsed.data.categoryId },
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: "Mezmur category not found" });
+    }
+
     const thumbnailType = await validateFileType(thumbnail.buffer);
 
     if (!thumbnailType.startsWith("image/")) {
@@ -175,6 +183,16 @@ export async function updateMezmur(req: Request, res: Response) {
         message: "Invalid mezmur data",
         errors: parsed.error.flatten(),
       });
+    }
+
+    if (parsed.data.categoryId !== undefined) {
+      const category = await prisma.mezmurCategory.findUnique({
+        where: { id: parsed.data.categoryId },
+      });
+
+      if (!category) {
+        return res.status(404).json({ message: "Mezmur category not found" });
+      }
     }
 
     const thumbnail = getThumbnail(req);

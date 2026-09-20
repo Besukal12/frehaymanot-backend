@@ -6,7 +6,7 @@ import {
   uploadToCloudinary,
 } from "../../middleware/uploadToCloudinary.js";
 import cloudinary from "../../config/cloudinary.js";
-import { CourseCategorySchema, CourseSchema } from "./course.schema.js";
+import { CourseSchema } from "./course.schema.js";
 import { isAdminRole } from "../../middleware/auth.middleware.js";
 import { parsePositiveInt } from "../../lib/ids.js";
 
@@ -15,7 +15,6 @@ const publicCourseSelect = {
   title: true,
   description: true,
   grade: true,
-  categoryId: true,
   thumbnailUrl: true,
   pdfUrl: true,
   createdAt: true,
@@ -57,7 +56,7 @@ export async function addCourse(req: Request, res: Response) {
       });
     }
 
-    const { title, description, grade, categoryId } = courseData.data;
+    const { title, description, grade } = courseData.data;
 
     const files = (req.files ?? {}) as {
       thumbnail?: Express.Multer.File[];
@@ -106,7 +105,6 @@ export async function addCourse(req: Request, res: Response) {
         title: title,
         description: description,
         grade: grade,
-        categoryId: categoryId,
 
         thumbnailUrl: uploadedThumbnail.secure_url,
         thumbnailStorageId: uploadedThumbnail.public_id,
@@ -309,7 +307,7 @@ export async function updateCourse(req: Request, res: Response) {
       });
     }
 
-    const { title, description, grade, categoryId } = safeData.data;
+    const { title, description, grade } = safeData.data;
 
     const files = (req.files ?? {}) as {
       thumbnail?: Express.Multer.File[];
@@ -323,7 +321,6 @@ export async function updateCourse(req: Request, res: Response) {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
       ...(grade !== undefined && { grade }),
-      ...(categoryId !== undefined && { categoryId }),
     };
 
     let oldThumbnailStorageId: string | null = null;

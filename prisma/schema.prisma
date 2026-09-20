@@ -40,7 +40,6 @@ model Course {
   title              String
   description        String?
   grade              Int
-  categoryId         Int
   thumbnailUrl       String?
   thumbnailStorageId String?
   pdfUrl             String?
