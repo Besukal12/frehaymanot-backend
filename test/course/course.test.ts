@@ -5,18 +5,8 @@ import { prisma } from "../setup.js";
 import { setAuth } from "../helpers/auth.js";
 import { PDF_BYTES, PNG_BYTES } from "../helpers/files.js";
 
-async function createCategory() {
-  setAuth("owner_1");
-  const res = await request(app).post("/api/course/categories").send({
-    name: "Theology",
-    description: "Core",
-  });
-  return res.body.category.id as number;
-}
-
 describe("Course resources", () => {
   it("rejects unauthenticated create", async () => {
-    const categoryId = await createCategory();
     setAuth(null);
 
     const res = await request(app)
@@ -37,13 +27,11 @@ describe("Course resources", () => {
   });
 
   it("rejects invalid grade and missing files", async () => {
-    const categoryId = await createCategory();
     setAuth("owner_1");
 
     const invalidGrade = await request(app).post("/api/course/create").send({
       title: "Intro",
       grade: 99,
-      categoryId,
     });
     expect(invalidGrade.status).toBe(400);
 
@@ -56,7 +44,6 @@ describe("Course resources", () => {
   });
 
   it("creates, reads, forbids non-owners, and deletes as admin", async () => {
-    const categoryId = await createCategory();
     setAuth("owner_1");
 
     const created = await request(app)
