@@ -24,17 +24,15 @@ model MezmurCategory {
 }
 
 model Mezmur {
-  id                 Int            @id @default(autoincrement())
-  title              String
-  description        String?
-  categoryId         Int
-  thumbnailUrl       String?
-  thumbnailStorageId String?
-  mezmurPoem         String
-  createdAt          DateTime       @default(now())
-  uploadedBy         String
-  updatedAt          DateTime       @updatedAt
-  category           MezmurCategory @relation(fields: [categoryId], references: [id])
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String?
+  categoryId  Int
+  mezmurPoem  String
+  createdAt   DateTime       @default(now())
+  uploadedBy  String
+  updatedAt   DateTime       @updatedAt
+  category    MezmurCategory @relation(fields: [categoryId], references: [id])
 }
 
 model Course {

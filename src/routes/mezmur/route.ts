@@ -35,19 +35,9 @@ router.delete("/categories/:id", checkAdmin, deleteMezmurCategory);
 router.get("/", getMezmurs);
 router.get("/:id", getMezmurById);
 
-router.post(
-  "/",
-  checkAdmin,
-  upload.fields([{ name: "thumbnail", maxCount: 1 }]),
-  addMezmur,
-);
+router.post("/", checkAdmin, addMezmur);
 
-router.patch(
-  "/:id",
-  checkAdmin,
-  upload.fields([{ name: "thumbnail", maxCount: 1 }]),
-  updateMezmur,
-);
+router.patch("/:id", checkAdmin, updateMezmur);
 
 router.delete("/:id", checkAdmin, deleteMezmur);
 
