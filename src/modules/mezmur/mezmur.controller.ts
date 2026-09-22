@@ -2,11 +2,6 @@ import { Request, Response } from "express";
 import { getAuth } from "@clerk/express";
 import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
-import cloudinary from "../../config/cloudinary.js";
-import {
-  uploadToCloudinary,
-  validateFileType,
-} from "../../middleware/uploadToCloudinary.js";
 import { MezmurSchema } from "./mezmur.schema.js";
 import { parsePositiveInt } from "../../lib/ids.js";
 
@@ -15,7 +10,6 @@ const publicMezmurSelect = {
   title: true,
   description: true,
   categoryId: true,
-  thumbnailUrl: true,
   mezmurPoem: true,
   createdAt: true,
   updatedAt: true,
@@ -23,29 +17,12 @@ const publicMezmurSelect = {
     select: {
       id: true,
       name: true,
+      imageUrl: true,
     },
   },
 } as const;
 
-async function destroyThumbnail(publicId: string) {
-  try {
-    await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
-  } catch (error) {
-    console.error(`Failed to clean up Cloudinary thumbnail ${publicId}`, error);
-  }
-}
-
-function getThumbnail(req: Request) {
-  const files = (req.files ?? {}) as {
-    thumbnail?: Express.Multer.File[];
-  };
-
-  return files.thumbnail?.[0];
-}
-
 export async function addMezmur(req: Request, res: Response) {
-  let uploadedThumbnailId: string | undefined;
-
   try {
     const { userId } = getAuth(req);
     const parsed = MezmurSchema.safeParse(req.body);
@@ -61,14 +38,6 @@ export async function addMezmur(req: Request, res: Response) {
       });
     }
 
-    const thumbnail = getThumbnail(req);
-
-    if (!thumbnail) {
-      return res.status(400).json({
-        message: "Thumbnail is required",
-      });
-    }
-
     const category = await prisma.mezmurCategory.findUnique({
       where: { id: parsed.data.categoryId },
     });
@@ -77,26 +46,9 @@ export async function addMezmur(req: Request, res: Response) {
       return res.status(404).json({ message: "Mezmur category not found" });
     }
 
-    const thumbnailType = await validateFileType(thumbnail.buffer);
-
-    if (!thumbnailType.startsWith("image/")) {
-      return res.status(400).json({
-        message: "Thumbnail must be an image",
-      });
-    }
-
-    const uploadedThumbnail = await uploadToCloudinary(
-      thumbnail.buffer,
-      thumbnailType,
-      { filename: thumbnail.originalname },
-    );
-    uploadedThumbnailId = uploadedThumbnail.public_id;
-
     const mezmur = await prisma.mezmur.create({
       data: {
         ...parsed.data,
-        thumbnailUrl: uploadedThumbnail.secure_url,
-        thumbnailStorageId: uploadedThumbnail.public_id,
         uploadedBy: userId,
       },
       select: publicMezmurSelect,
@@ -107,10 +59,6 @@ export async function addMezmur(req: Request, res: Response) {
       mezmur,
     });
   } catch (error) {
-    if (uploadedThumbnailId) {
-      await destroyThumbnail(uploadedThumbnailId);
-    }
-
     console.error("Add mezmur error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -161,8 +109,6 @@ export async function getMezmurById(req: Request, res: Response) {
 }
 
 export async function updateMezmur(req: Request, res: Response) {
-  let uploadedThumbnailId: string | undefined;
-
   try {
     const id = parsePositiveInt(req.params.id);
 
@@ -195,50 +141,17 @@ export async function updateMezmur(req: Request, res: Response) {
       }
     }
 
-    const thumbnail = getThumbnail(req);
-    let thumbnailData: {
-      thumbnailUrl?: string;
-      thumbnailStorageId?: string;
-    } = {};
-
-    if (thumbnail) {
-      const thumbnailType = await validateFileType(thumbnail.buffer);
-
-      if (!thumbnailType.startsWith("image/")) {
-        return res.status(400).json({ message: "Thumbnail must be an image" });
-      }
-
-      const uploadedThumbnail = await uploadToCloudinary(
-        thumbnail.buffer,
-        thumbnailType,
-        { filename: thumbnail.originalname },
-      );
-      uploadedThumbnailId = uploadedThumbnail.public_id;
-      thumbnailData = {
-        thumbnailUrl: uploadedThumbnail.secure_url,
-        thumbnailStorageId: uploadedThumbnail.public_id,
-      };
-    }
-
     const mezmur = await prisma.mezmur.update({
       where: { id },
-      data: { ...parsed.data, ...thumbnailData },
+      data: parsed.data,
       select: publicMezmurSelect,
     });
-
-    if (thumbnailData.thumbnailStorageId && existing.thumbnailStorageId) {
-      await destroyThumbnail(existing.thumbnailStorageId);
-    }
 
     return res.status(200).json({
       message: "Mezmur updated successfully",
       mezmur,
     });
   } catch (error) {
-    if (uploadedThumbnailId) {
-      await destroyThumbnail(uploadedThumbnailId);
-    }
-
     console.error("Update mezmur error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -259,10 +172,6 @@ export async function deleteMezmur(req: Request, res: Response) {
     }
 
     await prisma.mezmur.delete({ where: { id } });
-
-    if (mezmur.thumbnailStorageId) {
-      await destroyThumbnail(mezmur.thumbnailStorageId);
-    }
 
     return res.status(200).json({
       message: "Mezmur deleted successfully",

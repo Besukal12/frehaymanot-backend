@@ -3,13 +3,13 @@ import request from "supertest";
 import app from "../../src/app.js";
 import { prisma } from "../setup.js";
 import { setAuth } from "../helpers/auth.js";
-import { PNG_BYTES } from "../helpers/files.js";
 
-async function createCategory() {
+async function createCategory(imageUrl?: string) {
   const category = await prisma.mezmurCategory.create({
     data: {
       name: "Hymns",
       description: "General",
+      imageUrl,
     },
   });
   return category.id;
@@ -17,18 +17,16 @@ async function createCategory() {
 
 describe("Mezmur resources", () => {
   it("rejects unauthenticated create", async () => {
-    const categoryId = await createCategory();
+    const categoryId = await createCategory(
+      "https://cdn.example.com/hymns.jpg",
+    );
     clearAndStayLoggedOut();
 
-    const res = await request(app)
-      .post("/api/mezmur")
-      .field("title", "Song")
-      .field("categoryId", String(categoryId))
-      .field("mezmurPoem", "Song lyrics")
-      .attach("thumbnail", PNG_BYTES, {
-        filename: "t.png",
-        contentType: "image/png",
-      });
+    const res = await request(app).post("/api/mezmur").send({
+      title: "Song",
+      categoryId,
+      mezmurPoem: "Song lyrics",
+    });
 
     expect(res.status).toBe(401);
     expect(await prisma.mezmur.count()).toBe(0);
@@ -39,42 +37,43 @@ describe("Mezmur resources", () => {
     const invalid = await request(app).post("/api/mezmur").send({});
     expect(invalid.status).toBe(400);
 
-    const missingCategory = await request(app)
-      .post("/api/mezmur")
-      .field("title", "Song")
-      .field("categoryId", "9999")
-      .field("mezmurPoem", "Song lyrics")
-      .attach("thumbnail", PNG_BYTES, {
-        filename: "t.png",
-        contentType: "image/png",
-      });
+    const missingCategory = await request(app).post("/api/mezmur").send({
+      title: "Song",
+      categoryId: 9999,
+      mezmurPoem: "Song lyrics",
+    });
 
     expect(missingCategory.status).toBe(404);
     expect(await prisma.mezmur.count()).toBe(0);
   });
 
   it("creates, reads, updates, and deletes a mezmur with authz", async () => {
-    const categoryId = await createCategory();
+    const categoryId = await createCategory(
+      "https://cdn.example.com/hymns.jpg",
+    );
     setAuth("owner_1", "org:admin");
 
-    const created = await request(app)
-      .post("/api/mezmur")
-      .field("title", "Selam")
-      .field("description", "Peace")
-      .field("categoryId", String(categoryId))
-      .field("mezmurPoem", "Selam lyrics")
-      .attach("thumbnail", PNG_BYTES, {
-        filename: "t.png",
-        contentType: "image/png",
-      });
+    const created = await request(app).post("/api/mezmur").send({
+      title: "Selam",
+      description: "Peace",
+      categoryId,
+      mezmurPoem: "Selam lyrics",
+    });
 
     expect(created.status).toBe(201);
+    expect(created.body.mezmur.thumbnailUrl).toBeUndefined();
+    expect(created.body.mezmur.category.imageUrl).toBe(
+      "https://cdn.example.com/hymns.jpg",
+    );
     const id = created.body.mezmur.id as number;
     expect(await prisma.mezmur.findUnique({ where: { id } })).not.toBeNull();
 
     const listed = await request(app).get("/api/mezmur");
     expect(listed.status).toBe(200);
     expect(listed.body.mezmurs).toHaveLength(1);
+    expect(listed.body.mezmurs[0].category.imageUrl).toBe(
+      "https://cdn.example.com/hymns.jpg",
+    );
 
     const byId = await request(app).get(`/api/mezmur/${id}`);
     expect(byId.status).toBe(200);
@@ -89,7 +88,7 @@ describe("Mezmur resources", () => {
     setAuth("intruder");
     const forbidden = await request(app)
       .patch(`/api/mezmur/${id}`)
-      .field("title", "Hacked");
+      .send({ title: "Hacked" });
     expect(forbidden.status).toBe(403);
     expect((await prisma.mezmur.findUnique({ where: { id } }))?.title).toBe(
       "Selam",
@@ -102,7 +101,7 @@ describe("Mezmur resources", () => {
     setAuth("admin_1", "org:admin");
     const updated = await request(app)
       .patch(`/api/mezmur/${id}`)
-      .field("title", "Updated");
+      .send({ title: "Updated" });
     expect(updated.status).toBe(200);
     expect(updated.body.mezmur.title).toBe("Updated");
     expect((await prisma.mezmur.findUnique({ where: { id } }))?.title).toBe(
