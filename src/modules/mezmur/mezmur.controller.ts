@@ -23,6 +23,7 @@ const publicMezmurSelect = {
     select: {
       id: true,
       name: true,
+      imageUrl: true,
     },
   },
 } as const;
