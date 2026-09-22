@@ -66,7 +66,13 @@ export async function addMezmurCategory(req: Request, res: Response) {
     let imageData: { imageUrl?: string; imageStorageId?: string } = {};
 
     if (image) {
-      const imageType = await validateFileType(image.buffer);
+      let imageType: string;
+
+      try {
+        imageType = await validateFileType(image.buffer);
+      } catch {
+        return res.status(400).json({ message: "Invalid category image" });
+      }
 
       if (!imageType.startsWith("image/")) {
         return res
@@ -124,7 +130,13 @@ export async function updateMezmurCategory(req: Request, res: Response) {
     let imageData: { imageUrl?: string; imageStorageId?: string } = {};
 
     if (image) {
-      const imageType = await validateFileType(image.buffer);
+      let imageType: string;
+
+      try {
+        imageType = await validateFileType(image.buffer);
+      } catch {
+        return res.status(400).json({ message: "Invalid category image" });
+      }
 
       if (!imageType.startsWith("image/")) {
         return res
