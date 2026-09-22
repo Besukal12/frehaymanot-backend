@@ -34,7 +34,7 @@ const checkFileFilter = (
   callback: FileFilterCallback,
 ) => {
   if (
-    file.fieldname === "thumbnail" &&
+    (file.fieldname === "thumbnail" || file.fieldname === "image") &&
     (allowedImageTypes.includes(file.mimetype) ||
       file.mimetype === genericBinaryType)
   ) {

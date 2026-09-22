@@ -18,8 +18,18 @@ import {
 const router = Router();
 
 router.get("/categories", getMezmurCategories);
-router.post("/categories", checkAdmin, addMezmurCategory);
-router.patch("/categories/:id", checkAdmin, updateMezmurCategory);
+router.post(
+  "/categories",
+  checkAdmin,
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  addMezmurCategory,
+);
+router.patch(
+  "/categories/:id",
+  checkAdmin,
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  updateMezmurCategory,
+);
 router.delete("/categories/:id", checkAdmin, deleteMezmurCategory);
 
 router.get("/", getMezmurs);

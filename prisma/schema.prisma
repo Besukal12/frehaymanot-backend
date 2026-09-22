@@ -16,6 +16,8 @@ model MezmurCategory {
   id          Int      @id @default(autoincrement())
   name        String
   description String?
+  imageUrl    String?
+  imageStorageId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   mezmurs     Mezmur[]

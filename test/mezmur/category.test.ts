@@ -20,10 +20,12 @@ describe("Mezmur categories", () => {
 
   it("rejects invalid input", async () => {
     setAuth("user_1", "org:admin");
-    const res = await request(app).post(endpoint).send({
-      name: "",
-      description: "x".repeat(501),
-    });
+    const res = await request(app)
+      .post(endpoint)
+      .send({
+        name: "",
+        description: "x".repeat(501),
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Invalid input");
@@ -60,6 +62,26 @@ describe("Mezmur categories", () => {
     expect(list.status).toBe(200);
     expect(list.body.categories).toHaveLength(1);
     expect(list.body.categories[0]._count.mezmurs).toBe(0);
+    expect(list.body.categories[0].imageUrl).toBeNull();
+  });
+
+  it("returns a category image without exposing its storage id", async () => {
+    await prisma.mezmurCategory.create({
+      data: {
+        name: "With image",
+        imageUrl: "https://cdn.example.com/category.jpg",
+        imageStorageId: "category/image",
+      },
+    });
+
+    const response = await request(app).get(endpoint);
+
+    expect(response.status).toBe(200);
+    expect(response.body.categories[0]).toMatchObject({
+      name: "With image",
+      imageUrl: "https://cdn.example.com/category.jpg",
+    });
+    expect(response.body.categories[0].imageStorageId).toBeUndefined();
   });
 
   it("updates an existing category", async () => {
@@ -102,10 +124,10 @@ describe("Mezmur categories", () => {
     });
     const id = created.body.category.id;
 
-    const deleted = await request(app).delete(
-      `/api/mezmur/categories/${id}`,
-    );
+    const deleted = await request(app).delete(`/api/mezmur/categories/${id}`);
     expect(deleted.status).toBe(200);
-    expect(await prisma.mezmurCategory.findUnique({ where: { id } })).toBeNull();
+    expect(
+      await prisma.mezmurCategory.findUnique({ where: { id } }),
+    ).toBeNull();
   });
 });

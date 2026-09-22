@@ -5,11 +5,12 @@ import { prisma } from "../setup.js";
 import { setAuth } from "../helpers/auth.js";
 import { PNG_BYTES } from "../helpers/files.js";
 
-async function createCategory() {
+async function createCategory(imageUrl?: string) {
   const category = await prisma.mezmurCategory.create({
     data: {
       name: "Hymns",
       description: "General",
+      imageUrl,
     },
   });
   return category.id;
@@ -17,7 +18,9 @@ async function createCategory() {
 
 describe("Mezmur resources", () => {
   it("rejects unauthenticated create", async () => {
-    const categoryId = await createCategory();
+    const categoryId = await createCategory(
+      "https://cdn.example.com/hymns.jpg",
+    );
     clearAndStayLoggedOut();
 
     const res = await request(app)
@@ -54,7 +57,9 @@ describe("Mezmur resources", () => {
   });
 
   it("creates, reads, updates, and deletes a mezmur with authz", async () => {
-    const categoryId = await createCategory();
+    const categoryId = await createCategory(
+      "https://cdn.example.com/hymns.jpg",
+    );
     setAuth("owner_1", "org:admin");
 
     const created = await request(app)
@@ -75,6 +80,9 @@ describe("Mezmur resources", () => {
     const listed = await request(app).get("/api/mezmur");
     expect(listed.status).toBe(200);
     expect(listed.body.mezmurs).toHaveLength(1);
+    expect(listed.body.mezmurs[0].category.imageUrl).toBe(
+      "https://cdn.example.com/hymns.jpg",
+    );
 
     const byId = await request(app).get(`/api/mezmur/${id}`);
     expect(byId.status).toBe(200);
