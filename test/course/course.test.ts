@@ -6,6 +6,14 @@ import { setAuth } from "../helpers/auth.js";
 import { PDF_BYTES, PNG_BYTES } from "../helpers/files.js";
 
 describe("Course resources", () => {
+  async function createCategory() {
+    const category = await prisma.courseCategory.create({
+      data: { name: "Dogma" },
+    });
+
+    return category.id;
+  }
+
   it("rejects unauthenticated create", async () => {
     setAuth(null);
 
@@ -45,11 +53,13 @@ describe("Course resources", () => {
 
   it("creates, reads, forbids non-owners, and deletes as admin", async () => {
     setAuth("owner_1");
+    const categoryId = await createCategory();
 
     const created = await request(app)
       .post("/api/course")
       .field("title", "Dogma")
       .field("grade", "7")
+      .field("categoryId", String(categoryId))
       .attach("thumbnail", PNG_BYTES, {
         filename: "t.png",
         contentType: "image/png",
@@ -66,6 +76,10 @@ describe("Course resources", () => {
     const listed = await request(app).get("/api/course");
     expect(listed.status).toBe(200);
     expect(listed.body.courses).toHaveLength(1);
+    expect(listed.body.courses[0].category).toMatchObject({
+      id: categoryId,
+      name: "Dogma",
+    });
 
     const byId = await request(app).get(`/api/course/${id}`);
     expect(byId.status).toBe(200);
