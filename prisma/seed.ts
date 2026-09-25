@@ -6588,11 +6588,11 @@ const seed = async () => {
   const uploadedImages = await uploadCategoryImages();
   const uploadedBy = process.env.SEED_UPLOADED_BY ?? "seed";
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.mezmur.deleteMany();
-    await transaction.mezmurCategory.deleteMany();
+  await prisma.mezmur.deleteMany();
+  await prisma.mezmurCategory.deleteMany();
 
-    for (const category of mezmurCategories) {
+  await prisma.mezmurCategory.createMany({
+    data: mezmurCategories.map((category) => {
       const fileName = path.basename(category.imageUrl ?? "");
       const uploadedImage = uploadedImages.get(fileName);
 
@@ -6600,28 +6600,26 @@ const seed = async () => {
         throw new Error(`Image upload missing for category ${category.id}`);
       }
 
-      await transaction.mezmurCategory.create({
-        data: {
-          id: category.id,
-          name: category.name,
-          imageUrl: uploadedImage.secure_url,
-          imageStorageId: uploadedImage.public_id,
-        },
-      });
-    }
+      return {
+        id: category.id,
+        name: category.name,
+        imageUrl: uploadedImage.secure_url,
+        imageStorageId: uploadedImage.public_id,
+      };
+    }),
+  });
 
-    await transaction.mezmur.createMany({
-      data: mezmurs.map((mezmur) => ({
-        id: mezmur.id,
-        title: mezmur.title,
-        description: mezmur.description,
-        categoryId: mezmur.categoryId,
-        mezmurPoem: mezmur.mezmurPoem,
-        uploadedBy,
-        createdAt: new Date(mezmur.createdAt),
-        updatedAt: new Date(mezmur.updatedAt),
-      })),
-    });
+  await prisma.mezmur.createMany({
+    data: mezmurs.map((mezmur) => ({
+      id: mezmur.id,
+      title: mezmur.title,
+      description: mezmur.description,
+      categoryId: mezmur.categoryId,
+      mezmurPoem: mezmur.mezmurPoem,
+      uploadedBy,
+      createdAt: new Date(mezmur.createdAt),
+      updatedAt: new Date(mezmur.updatedAt),
+    })),
   });
 
   console.log(
