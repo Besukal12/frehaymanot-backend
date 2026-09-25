@@ -7,11 +7,32 @@ import {
   updateCourse,
   deleteCourse,
 } from "../../modules/course/course.controller.js";
+import {
+  addCourseCategory,
+  deleteCourseCategory,
+  getCourseCategories,
+  updateCourseCategory,
+} from "../../modules/course/category.controller.js";
 
 import upload from "../../middleware/uploadToCloudinary.js";
-import { checkAuth } from "../../middleware/auth.middleware.js";
+import { checkAdmin, checkAuth } from "../../middleware/auth.middleware.js";
 
 const router = Router();
+
+router.get("/categories", getCourseCategories);
+router.post(
+  "/categories",
+  checkAdmin,
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  addCourseCategory,
+);
+router.patch(
+  "/categories/:id",
+  checkAdmin,
+  upload.fields([{ name: "image", maxCount: 1 }]),
+  updateCourseCategory,
+);
+router.delete("/categories/:id", checkAdmin, deleteCourseCategory);
 
 router.get("/", getCourse);
 router.get("/:id", getCourseById);

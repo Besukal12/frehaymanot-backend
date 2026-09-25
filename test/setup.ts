@@ -23,7 +23,10 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is missing after test environment setup.");
 }
 
-if (/prod(?:uction)?/i.test(process.env.DATABASE_URL) && !/test/i.test(process.env.DATABASE_URL)) {
+if (
+  /prod(?:uction)?/i.test(process.env.DATABASE_URL) &&
+  !/test/i.test(process.env.DATABASE_URL)
+) {
   throw new Error(
     "Refusing to run tests against a production-looking database URL. Set TEST_DATABASE_URL.",
   );
@@ -36,6 +39,7 @@ async function resetDatabase() {
   await prisma.announcement.deleteMany();
   await prisma.mezmur.deleteMany();
   await prisma.course.deleteMany();
+  await prisma.courseCategory.deleteMany();
   await prisma.mezmurCategory.deleteMany();
 }
 
