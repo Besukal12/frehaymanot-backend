@@ -1,0 +1,1 @@
+-- No-op: the cleanup job model was removed before this migration was applied.

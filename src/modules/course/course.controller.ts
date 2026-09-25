@@ -15,10 +15,18 @@ const publicCourseSelect = {
   title: true,
   description: true,
   grade: true,
+  categoryId: true,
   thumbnailUrl: true,
   pdfUrl: true,
   createdAt: true,
   updatedAt: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+    },
+  },
 } as const;
 
 async function destroyCourseAsset(
@@ -56,7 +64,15 @@ export async function addCourse(req: Request, res: Response) {
       });
     }
 
-    const { title, description, grade } = courseData.data;
+    const { title, description, grade, categoryId } = courseData.data;
+
+    const category = await prisma.courseCategory.findUnique({
+      where: { id: categoryId },
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: "Course category not found" });
+    }
 
     const files = (req.files ?? {}) as {
       thumbnail?: Express.Multer.File[];
@@ -105,6 +121,7 @@ export async function addCourse(req: Request, res: Response) {
         title: title,
         description: description,
         grade: grade,
+        categoryId: categoryId,
 
         thumbnailUrl: uploadedThumbnail.secure_url,
         thumbnailStorageId: uploadedThumbnail.public_id,
@@ -307,7 +324,17 @@ export async function updateCourse(req: Request, res: Response) {
       });
     }
 
-    const { title, description, grade } = safeData.data;
+    const { title, description, grade, categoryId } = safeData.data;
+
+    if (categoryId !== undefined) {
+      const category = await prisma.courseCategory.findUnique({
+        where: { id: categoryId },
+      });
+
+      if (!category) {
+        return res.status(404).json({ message: "Course category not found" });
+      }
+    }
 
     const files = (req.files ?? {}) as {
       thumbnail?: Express.Multer.File[];
@@ -321,6 +348,7 @@ export async function updateCourse(req: Request, res: Response) {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
       ...(grade !== undefined && { grade }),
+      ...(categoryId !== undefined && { categoryId }),
     };
 
     let oldThumbnailStorageId: string | null = null;
