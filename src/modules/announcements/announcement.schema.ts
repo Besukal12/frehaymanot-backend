@@ -1,5 +1,12 @@
 import z from "zod";
 
+const AnnouncementAudienceSchema = z.enum([
+  "YOUTH",
+  "CENTRAL",
+  "CHILDREN",
+  "EVERYONE",
+]);
+
 export const CreateAnnouncementSchema = z.object({
   title: z.string().trim().min(1).max(255),
   slug: z
@@ -13,10 +20,11 @@ export const CreateAnnouncementSchema = z.object({
     )
     .optional(),
   content: z.string().trim().min(1),
-  audience: z
-    .enum(["YOUTH", "CENTRAL", "CHILDREN", "EVERYONE"])
-    .default("EVERYONE"),
+  audience: AnnouncementAudienceSchema.default("EVERYONE"),
   postedAt: z.coerce.date().optional(),
 });
 
-export const UpdateAnnouncementSchema = CreateAnnouncementSchema.partial();
+export const UpdateAnnouncementSchema =
+  CreateAnnouncementSchema.partial().extend({
+    audience: AnnouncementAudienceSchema.optional(),
+  });

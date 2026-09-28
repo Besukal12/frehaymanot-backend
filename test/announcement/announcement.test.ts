@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import app from "../../src/app.js";
+import {
+  CreateAnnouncementSchema,
+  UpdateAnnouncementSchema,
+} from "../../src/modules/announcements/announcement.schema.js";
 import { prisma } from "../setup.js";
 import { setAuth } from "../helpers/auth.js";
 
 describe("Announcements", () => {
+  it("defaults create audience but leaves omitted update audience undefined", () => {
+    expect(
+      CreateAnnouncementSchema.parse({ title: "Hello", content: "Welcome" })
+        .audience,
+    ).toBe("EVERYONE");
+    expect(UpdateAnnouncementSchema.parse({}).audience).toBeUndefined();
+  });
+
   it("rejects unauthenticated create", async () => {
     const res = await request(app).post("/api/announcements").send({
       title: "Hello",
