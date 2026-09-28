@@ -198,7 +198,7 @@ export async function deleteMezmurCategory(req: Request, res: Response) {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2025"
     ) {
-      return res.status(404).json({ message: "Category not found" });
+      return res.status(409).json({ message: "Category not found" });
     }
 
     console.error("Delete mezmur category error:", error);
