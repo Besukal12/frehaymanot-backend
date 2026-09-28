@@ -20,6 +20,7 @@ const publicAnnouncementSelect = {
   title: true,
   slug: true,
   content: true,
+  audience: true,
   thumbnailUrl: true,
   postedAt: true,
   createdAt: true,
@@ -74,7 +75,7 @@ export async function addAnnouncement(req: Request, res: Response) {
       });
     }
 
-    const { title, content, postedAt, slug: providedSlug } = result.data;
+    const { title, content, audience, postedAt, slug: providedSlug } = result.data;
 
     const slug = providedSlug ?? generateSlug(title);
 
@@ -114,6 +115,7 @@ export async function addAnnouncement(req: Request, res: Response) {
         title,
         slug,
         content,
+        audience,
         postedAt: postedAt ?? new Date(),
         thumbnailUrl,
         thumbnailStorageId,
@@ -275,16 +277,9 @@ export async function updateAnnouncement(req: Request, res: Response) {
       });
     }
 
-    const { title, slug, content, postedAt } = result.data;
+    const { title, slug, content, audience, postedAt } = result.data;
 
-    const updateData: {
-      title?: string;
-      slug?: string;
-      content?: string;
-      postedAt?: Date;
-      thumbnailUrl?: string;
-      thumbnailStorageId?: string;
-    } = {};
+    const updateData: Prisma.AnnouncementUpdateInput = {};
 
     if (title !== undefined) {
       updateData.title = title;
@@ -306,6 +301,10 @@ export async function updateAnnouncement(req: Request, res: Response) {
 
     if (content !== undefined) {
       updateData.content = content;
+    }
+
+    if (audience !== undefined) {
+      updateData.audience = audience;
     }
 
     if (postedAt !== undefined) {

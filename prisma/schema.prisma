@@ -62,11 +62,19 @@ model Course {
   category           CourseCategory @relation(fields: [categoryId], references: [id])
 }
 
+enum AnnouncementAudience {
+  YOUTH
+  CENTRAL
+  CHILDREN
+  EVERYONE
+}
+
 model Announcement {
   id                 Int      @id @default(autoincrement())
   title              String
   slug               String   @unique
   content            String
+  audience           AnnouncementAudience @default(EVERYONE)
   thumbnailUrl       String?
   thumbnailStorageId String?
   uploadedById       String
