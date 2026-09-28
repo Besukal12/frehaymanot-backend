@@ -22,6 +22,22 @@ const publicMezmurSelect = {
   },
 } as const;
 
+const publicMezmurSummarySelect = {
+  id: true,
+  title: true,
+  description: true,
+  categoryId: true,
+  createdAt: true,
+  updatedAt: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+    },
+  },
+} as const;
+
 export async function addMezmur(req: Request, res: Response) {
   try {
     const { userId } = getAuth(req);
@@ -68,7 +84,7 @@ export async function getMezmurs(_req: Request, res: Response) {
   try {
     const mezmurs = await prisma.mezmur.findMany({
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: publicMezmurSelect,
+      select: publicMezmurSummarySelect,
     });
 
     return res.status(200).json({
