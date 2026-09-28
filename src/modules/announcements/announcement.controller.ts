@@ -75,7 +75,13 @@ export async function addAnnouncement(req: Request, res: Response) {
       });
     }
 
-    const { title, content, audience, postedAt, slug: providedSlug } = result.data;
+    const {
+      title,
+      content,
+      audience,
+      postedAt,
+      slug: providedSlug,
+    } = result.data;
 
     const slug = providedSlug ?? generateSlug(title);
 

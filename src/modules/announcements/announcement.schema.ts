@@ -13,7 +13,9 @@ export const CreateAnnouncementSchema = z.object({
     )
     .optional(),
   content: z.string().trim().min(1),
-  audience: z.enum(["YOUTH", "CENTRAL", "CHILDREN", "EVERYONE"]).default("EVERYONE"),
+  audience: z
+    .enum(["YOUTH", "CENTRAL", "CHILDREN", "EVERYONE"])
+    .default("EVERYONE"),
   postedAt: z.coerce.date().optional(),
 });
 
