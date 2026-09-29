@@ -27,6 +27,7 @@ const publicMezmurSummarySelect = {
   title: true,
   description: true,
   categoryId: true,
+  mezmurPoem: true,
   createdAt: true,
   updatedAt: true,
   category: {
@@ -82,10 +83,14 @@ export async function addMezmur(req: Request, res: Response) {
 
 export async function getMezmurs(_req: Request, res: Response) {
   try {
-    const mezmurs = await prisma.mezmur.findMany({
+    const mezmurRows = await prisma.mezmur.findMany({
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: publicMezmurSummarySelect,
     });
+    const mezmurs = mezmurRows.map(({ mezmurPoem, ...mezmur }) => ({
+      ...mezmur,
+      poemFirstLine: mezmurPoem.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "",
+    }));
 
     return res.status(200).json({
       message: "Mezmurs retrieved successfully",
