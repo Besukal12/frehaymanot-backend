@@ -57,7 +57,7 @@ describe("Mezmur resources", () => {
       title: "Selam",
       description: "Peace",
       categoryId,
-      mezmurPoem: "Selam lyrics",
+      mezmurPoem: "Selam lyrics\nSecond verse",
     });
 
     expect(created.status).toBe(201);
@@ -74,6 +74,8 @@ describe("Mezmur resources", () => {
     expect(listed.body.mezmurs[0].category.imageUrl).toBe(
       "https://cdn.example.com/hymns.jpg",
     );
+    expect(listed.body.mezmurs[0].poemFirstLine).toBe("Selam lyrics");
+    expect(listed.body.mezmurs[0].mezmurPoem).toBeUndefined();
 
     const byId = await request(app).get(`/api/mezmur/${id}`);
     expect(byId.status).toBe(200);
