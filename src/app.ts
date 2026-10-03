@@ -1,4 +1,5 @@
 import express from "express";
+import { clerkMiddleware } from "@clerk/express";
 import announcementRoutes from "./routes/announcement/route.js";
 import courseRoutes from "./routes/course/route.js";
 import feedbackRoutes from "./routes/feedback/route.js";
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(clerkMiddleware());
 app.use(express.json());
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/course", courseRoutes);
