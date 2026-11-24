@@ -8,6 +8,8 @@ import {
   assertTrustedOrigin,
   setRefreshCookie,
   validationError,
+  clearRefreshCookie,
+  refreshCookieName
 } from "./auth.service.js";
 import {
   createAccessToken,
@@ -16,7 +18,10 @@ import {
   verifyRefreshToken,
 } from "../../lib/token.js";
 
-export async function RegisterHandler(req: Request, res: Response) {
+export async function RegisterHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   assertTrustedOrigin(req);
 
   const parsed = RegisterSchema.safeParse(req.body);
@@ -82,7 +87,7 @@ export async function RegisterHandler(req: Request, res: Response) {
   }
 }
 
-export async function LoginHandler(req: Request, res: Response) {
+export async function LoginHandler(req: Request, res: Response): Promise<void> {
   assertTrustedOrigin(req);
 
   const parsed = LoginSchema.safeParse(req.body);
@@ -129,4 +134,83 @@ export async function LoginHandler(req: Request, res: Response) {
     },
     accessToken: createAccessToken(user.id),
   });
+}
+
+export async function RefreshTokenHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  assertTrustedOrigin(req);
+
+  const token = req.cookies?.[refreshCookieName];
+  if (typeof token !== "string")
+    throw new UnauthorizedError("Authentication required");
+
+  const { userId, expiresAt } = verifyRefreshToken(token);
+  const tokenHash = hashRefreshToken(token);
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true },
+  });
+
+  if (!user || user.status !== "ACTIVE") {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+    clearRefreshCookie(res);
+    throw new UnauthorizedError("Authentication required");
+  }
+
+  if (
+    !stored ||
+    stored.userId !== userId ||
+    stored.expiresAt <= new Date() ||
+    expiresAt <= new Date()
+  ) {
+    if (!stored) await prisma.refreshToken.deleteMany({ where: { userId } });
+    clearRefreshCookie(res);
+    throw new UnauthorizedError(
+      "Refresh token is invalid or has already been used",
+    );
+  }
+
+  const nextToken = createRefreshToken(userId);
+  const nextExpiry = verifyRefreshToken(nextToken).expiresAt;
+
+  const rotated = await prisma.$transaction(async (tx) => {
+    const removed = await tx.refreshToken.deleteMany({
+      where: { id: stored.id },
+    });
+    if (removed.count !== 1) return false;
+    await tx.refreshToken.create({
+      data: {
+        userId,
+        tokenHash: hashRefreshToken(nextToken),
+        expiresAt: nextExpiry,
+      },
+    });
+    return true;
+  });
+
+  if (!rotated) {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+    clearRefreshCookie(res);
+    throw new UnauthorizedError("Refresh token has already been used");
+  }
+
+  setRefreshCookie(res, nextToken);
+  res.status(200).json({ accessToken: createAccessToken(userId) });
+}
+
+export async function LogoutHandler(req: Request, res: Response): Promise<void> {
+  assertTrustedOrigin(req);
+
+  const token = req.cookies?.[refreshCookieName];
+  if (typeof token === "string")
+    await prisma.refreshToken.deleteMany({
+      where: { tokenHash: hashRefreshToken(token) },
+    });
+
+  clearRefreshCookie(res);
+  res.status(204).end();
 }
