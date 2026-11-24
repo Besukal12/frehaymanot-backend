@@ -1,0 +1,522 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────── ENUMS ─────────────
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MembershipStatus {
+  UNDER_REVIEW
+  APPROVED
+  NOT_APPROVED
+}
+
+enum DepartmentRole {
+  ADMIN
+  STAFF
+}
+
+enum DepartmentType {
+  EDUCATION
+  MEZMUR
+  MEMBERS
+  EVENTS
+  FINANCE
+}
+
+enum ClassType {
+  COURSE
+  MEZMUR
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  ENDED
+  TRANSFERRED
+}
+
+enum SeasonStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+enum SessionType {
+  REGULAR
+  ADDITIONAL
+}
+
+enum SessionStatus {
+  PLANNED
+  OPEN
+  FINALIZED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum AttendanceMethod {
+  QR
+  MANUAL
+}
+
+enum PermissionType {
+  ONE_SESSION_ABSENCE
+  ONE_SESSION_LATE
+  RECURRING_LATE
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementAudience {
+  COURSE
+  MEZMUR
+  BOTH_DEPARTMENTS
+  EVERYONE
+  SPECIFIC_CLASSES
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ObligationStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentStatus {
+  RECORDED
+  REVERSED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum StudentCurrentStatus {
+  ELEMENTARY_STUDENT
+  HIGH_SCHOOL_STUDENT
+  UNIVERSITY_STUDENT
+  WORKER
+}
+
+// ───────────── ACCOUNTS & ACCESS ─────────────
+model User {
+  id            String     @id @default(uuid())
+  username      String     @unique
+  passwordHash  String
+  phone         String
+  gender        Gender
+  expoPushToken String?
+  status        UserStatus @default(ACTIVE)
+  isSuperAdmin  Boolean    @default(false) // Super Admin has no department
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  student        Student?
+  departmentRole UserDepartmentRole? @relation("RoleOwner")
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+
+  rolesCreated         UserDepartmentRole[] @relation("RoleCreator")
+  enrollmentsAssigned  ClassEnrollment[]
+  permissionsAssigned  StudentPermission[]
+  sessionsCreated      LearningSession[]
+  attendanceMarked     AttendanceRecord[]   @relation("AttendanceMarker")
+  attendanceUpdated    AttendanceRecord[]   @relation("AttendanceUpdater")
+  mezmursCreated       Mezmur[]
+  libraryItemsUploaded DigitalLibraryItem[]
+  announcementsCreated Announcement[]
+  eventsCreated        Event[]
+  paymentsRecorded     Payment[]            @relation("PaymentRecorder")
+  paymentsReversed     Payment[]            @relation("PaymentReverser")
+
+  @@index([phone])
+}
+
+model Student {
+  id                     String               @id @default(uuid())
+  userId                 String               @unique
+  fullName               String
+  dateOfBirth            DateTime             @db.Date
+  profileImageUrl        String?
+  profileImageStorageKey String?
+  profileImageChangedAt  DateTime? // enforces "once every 7 days"
+  guardianPhone          String?
+  woreda                 String
+  area                   String
+  currentStatus          StudentCurrentStatus
+  attendedPreviousSchool Boolean              @default(false)
+  previousSchoolName     String?
+  evidenceImageUrl       String?
+  evidenceStorageKey     String?
+  membershipStatus       MembershipStatus     @default(UNDER_REVIEW)
+  registrationDate       DateTime             @default(now())
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  enrollments ClassEnrollment[]
+  permissions StudentPermission[]
+  attendance  AttendanceRecord[]
+  obligations MonthlyObligation[]
+  payments    Payment[]
+
+  @@index([fullName])
+  @@index([membershipStatus])
+  @@index([registrationDate])
+}
+
+model Department {
+  id        Int            @id @default(autoincrement())
+  name      String         @unique
+  type      DepartmentType
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+
+  roles UserDepartmentRole[]
+}
+
+model UserDepartmentRole {
+  id           Int            @id @default(autoincrement())
+  userId       String         @unique
+  departmentId Int
+  role         DepartmentRole
+  createdById  String
+  createdAt    DateTime       @default(now())
+
+  user       User       @relation("RoleOwner", fields: [userId], references: [id], onDelete: Restrict)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdBy  User       @relation("RoleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([departmentId, role])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+}
+
+// ───────────── CLASSES, ENROLLMENT, ATTENDANCE ─────────────
+model Class {
+  id          Int       @id @default(autoincrement())
+  name        String
+  type        ClassType
+  gradeNumber Int?
+  minAge      Int?
+  maxAge      Int?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  enrollments ClassEnrollment[]
+  sessions    LearningSession[]
+  permissions StudentPermission[]
+
+  @@index([type, isActive])
+}
+
+model CourseSeason {
+  id                 Int          @id @default(autoincrement())
+  name               String
+  ethiopianStartYear Int
+  startDate          DateTime     @db.Date
+  endDate            DateTime     @db.Date
+  status             SeasonStatus @default(PLANNED)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  enrollments ClassEnrollment[]
+
+  @@index([status])
+}
+
+model ClassEnrollment {
+  id               String           @id @default(uuid())
+  studentId        String
+  classId          Int
+  courseSeasonId   Int?
+  track            ClassType // copy of class.type, needed for the one-active-per-track index
+  attendanceNumber Int
+  status           EnrollmentStatus @default(ACTIVE)
+  assignedById     String
+  startsAt         DateTime         @default(now())
+  endsAt           DateTime?
+
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  class        Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  courseSeason CourseSeason? @relation(fields: [courseSeasonId], references: [id], onDelete: Restrict)
+  assignedBy   User          @relation(fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@index([studentId, track, status])
+  @@index([classId, status])
+  @@index([courseSeasonId])
+}
+
+model StudentPermission {
+  id           String         @id @default(uuid())
+  studentId    String
+  type         PermissionType
+  sessionId    String?
+  classId      Int?
+  validFrom    DateTime?      @db.Date
+  validUntil   DateTime?      @db.Date
+  assignedById String
+  note         String?
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session    LearningSession? @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  class      Class?           @relation(fields: [classId], references: [id], onDelete: Restrict)
+  assignedBy User             @relation(fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@index([studentId, type, isActive])
+  @@index([sessionId])
+  @@index([classId])
+}
+
+model LearningSession {
+  id                           String        @id @default(uuid())
+  classId                      Int
+  sessionDate                  DateTime      @db.Date
+  title                        String?
+  type                         SessionType   @default(REGULAR)
+  status                       SessionStatus @default(PLANNED)
+  qrTokenHash                  String?
+  qrOpensAt                    DateTime // start - 30 min
+  normalClosesAt               DateTime // = session start time
+  lateClosesAt                 DateTime? // set when staff opens the late window (+30 min)
+  includeInCeremonyEligibility Boolean       @default(false)
+  createdById                  String
+  createdAt                    DateTime      @default(now())
+  updatedAt                    DateTime      @updatedAt
+
+  class       Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
+  createdBy   User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  attendance  AttendanceRecord[]
+  permissions StudentPermission[]
+
+  @@index([classId, sessionDate])
+  @@index([status])
+}
+
+model AttendanceRecord {
+  id          String           @id @default(uuid())
+  sessionId   String
+  studentId   String
+  status      AttendanceStatus
+  method      AttendanceMethod
+  markedById  String
+  updatedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  session   LearningSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  student   Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  markedBy  User            @relation("AttendanceMarker", fields: [markedById], references: [id], onDelete: Restrict)
+  updatedBy User?           @relation("AttendanceUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId, createdAt])
+}
+
+// ───────────── CONTENT ─────────────
+model MezmurCategory {
+  id        Int     @id @default(autoincrement())
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  mezmurs Mezmur[]
+}
+
+model Mezmur {
+  id          Int           @id @default(autoincrement())
+  categoryId  Int
+  title       String
+  lyrics      String        @db.Text
+  status      ContentStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  category  MezmurCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([categoryId, status])
+  @@index([title])
+}
+
+model DigitalLibraryCategory {
+  id        Int     @id @default(autoincrement())
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  items DigitalLibraryItem[]
+}
+
+model DigitalLibraryItem {
+  id            Int           @id @default(autoincrement())
+  categoryId    Int
+  title         String
+  description   String?       @db.Text
+  gradeNumber   Int
+  pdfUrl        String
+  pdfStorageKey String
+  status        ContentStatus @default(DRAFT)
+  uploadedById  String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  category   DigitalLibraryCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  uploadedBy User                   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([gradeNumber, status])
+  @@index([categoryId, status])
+}
+
+model Announcement {
+  id             Int                  @id @default(autoincrement())
+  title          String
+  body           String               @db.Text
+  audience       AnnouncementAudience
+  targetClassIds Int[]
+  status         ContentStatus        @default(DRAFT)
+  publishedAt    DateTime?
+  createdById    String
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([status, publishedAt])
+  @@index([audience])
+}
+
+model Event {
+  id              Int         @id @default(autoincrement())
+  title           String
+  description     String      @db.Text
+  startsAt        DateTime
+  endsAt          DateTime
+  location        String
+  imageUrl        String?
+  imageStorageKey String?
+  visibleFrom     DateTime
+  visibleUntil    DateTime
+  status          EventStatus @default(DRAFT)
+  createdById     String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([status, visibleFrom, visibleUntil])
+}
+
+// ───────────── FINANCE ─────────────
+model MonthlyObligation {
+  id             String           @id @default(uuid())
+  studentId      String
+  ethiopianYear  Int
+  ethiopianMonth Int // 1-12 (Pagume counts under Nehase)
+  amountDue      Decimal          @db.Decimal(10, 2)
+  feeSnapshot    Decimal          @db.Decimal(10, 2)
+  status         ObligationStatus @default(OPEN)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  allocations PaymentAllocation[]
+
+  @@unique([studentId, ethiopianYear, ethiopianMonth])
+  @@index([status])
+  @@index([ethiopianYear, ethiopianMonth])
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  studentId      String
+  amount         Decimal       @db.Decimal(10, 2)
+  paidAt         DateTime
+  recordedById   String
+  reference      String?
+  note           String?
+  status         PaymentStatus @default(RECORDED)
+  reversedAt     DateTime?
+  reversedById   String?
+  idempotencyKey String?       @unique // prevents duplicate processing on retry
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  recordedBy  User                @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  reversedBy  User?               @relation("PaymentReverser", fields: [reversedById], references: [id], onDelete: Restrict)
+  allocations PaymentAllocation[]
+
+  @@index([studentId, paidAt])
+  @@index([status])
+}
+
+model PaymentAllocation {
+  id           String   @id @default(uuid())
+  paymentId    String
+  obligationId String
+  amount       Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+
+  payment    Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  obligation MonthlyObligation @relation(fields: [obligationId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, obligationId])
+  @@index([obligationId])
+}
