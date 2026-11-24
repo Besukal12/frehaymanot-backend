@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { env } from "../../config/env.js";
 import { BadRequestError, ForbiddenError } from "../../core/CustomError.js";
+import { REFRESH_TOKEN_TTL_MS } from "../../lib/token.js";
 
 export const refreshCookieName = "debo_refresh";
 export const refreshCookieOptions = {
@@ -8,7 +9,7 @@ export const refreshCookieOptions = {
   secure: env.NODE_ENV === "production",
   sameSite: "strict" as const,
   path: "/api/auth",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: REFRESH_TOKEN_TTL_MS,
 };
 
 export function assertTrustedOrigin(req: Request): void {

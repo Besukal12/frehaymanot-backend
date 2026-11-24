@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import { RegisterSchema } from "./auth.schema.js";
-import { ConflictError } from "../../core/CustomError.js";
-import { hashPassword } from "../../lib/hash.js";
+import { RegisterSchema, LoginSchema } from "./auth.schema.js";
+import { ConflictError, UnauthorizedError } from "../../core/CustomError.js";
+import { hashPassword, checkPassword } from "../../lib/hash.js";
 import {
   assertTrustedOrigin,
   setRefreshCookie,
@@ -80,4 +80,53 @@ export async function RegisterHandler(req: Request, res: Response) {
       throw new ConflictError("An account with this username already exists");
     throw error;
   }
+}
+
+export async function LoginHandler(req: Request, res: Response) {
+  assertTrustedOrigin(req);
+
+  const parsed = LoginSchema.safeParse(req.body);
+  if (!parsed.success) throw validationError(parsed.error.issues);
+
+  const user = await prisma.user.findUnique({
+    where: { username: parsed.data.username },
+    select: {
+      id: true,
+      username: true,
+      phone: true,
+      gender: true,
+      status: true,
+      passwordHash: true,
+    },
+  });
+
+  if (
+    !user ||
+    user.status !== "ACTIVE" ||
+    !(await checkPassword(parsed.data.password, user.passwordHash))
+  )
+    throw new UnauthorizedError("Username or password is incorrect");
+
+  const refreshToken = createRefreshToken(user.id);
+  const expiresAt = verifyRefreshToken(refreshToken).expiresAt;
+
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: hashRefreshToken(refreshToken),
+      expiresAt,
+    },
+  });
+
+  setRefreshCookie(res, refreshToken);
+  res.status(200).json({
+    message: "Login successful",
+    user: {
+      id: user.id,
+      username: user.username,
+      phone: user.phone,
+      gender: user.gender,
+    },
+    accessToken: createAccessToken(user.id),
+  });
 }
