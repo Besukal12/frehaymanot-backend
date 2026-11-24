@@ -257,3 +257,28 @@ export async function ChangePasswordHandler(
     message: "Password changed. Please sign in again on your other devices.",
   });
 }
+
+export async function GetCurrentUserHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  if (!req.auth) throw new UnauthorizedError("Authentication required");
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.auth.userId },
+    select: {
+      id: true,
+      username: true,
+      phone: true,
+      gender: true,
+      status: true,
+      isSuperAdmin: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user || user.status !== "ACTIVE")
+    throw new UnauthorizedError("Authentication required");
+
+  res.status(200).json({ user });
+}
