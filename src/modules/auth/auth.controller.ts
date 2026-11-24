@@ -14,7 +14,7 @@ import {
   setRefreshCookie,
   validationError,
   clearRefreshCookie,
-  refreshCookieName
+  refreshCookieName,
 } from "./auth.service.js";
 import {
   createAccessToken,
@@ -207,7 +207,10 @@ export async function RefreshTokenHandler(
   res.status(200).json({ accessToken: createAccessToken(userId) });
 }
 
-export async function LogoutHandler(req: Request, res: Response): Promise<void> {
+export async function LogoutHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   assertTrustedOrigin(req);
 
   const token = req.cookies?.[refreshCookieName];

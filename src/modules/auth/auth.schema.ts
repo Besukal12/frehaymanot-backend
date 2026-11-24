@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  Gender,
-  StudentCurrentStatus,
-} from "../../generated/prisma/enums.js";
+import { Gender, StudentCurrentStatus } from "../../generated/prisma/enums.js";
 import {
   PasswordSchema,
   PhoneSchema,
@@ -53,8 +50,7 @@ export const StudentProfileSchema = z
       .refine((value) => {
         const url = new URL(value);
         return (
-          url.protocol === "https:" &&
-          url.hostname === "res.cloudinary.com"
+          url.protocol === "https:" && url.hostname === "res.cloudinary.com"
         );
       }, "Evidence must be a secure Cloudinary URL")
       .optional(),
@@ -70,8 +66,7 @@ export const StudentProfileSchema = z
       now.getUTCFullYear() -
       birthYear -
       (now.getUTCMonth() + 1 < birthMonth ||
-      (now.getUTCMonth() + 1 === birthMonth &&
-        now.getUTCDate() < birthDay)
+      (now.getUTCMonth() + 1 === birthMonth && now.getUTCDate() < birthDay)
         ? 1
         : 0);
 
