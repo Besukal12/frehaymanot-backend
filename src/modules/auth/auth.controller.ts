@@ -1,7 +1,11 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import { RegisterSchema, LoginSchema } from "./auth.schema.js";
+import {
+  ChangePasswordSchema,
+  LoginSchema,
+  RegisterSchema,
+} from "./auth.schema.js";
 import { ConflictError, UnauthorizedError } from "../../core/CustomError.js";
 import { hashPassword, checkPassword } from "../../lib/hash.js";
 import {
@@ -213,4 +217,43 @@ export async function LogoutHandler(req: Request, res: Response): Promise<void> 
 
   clearRefreshCookie(res);
   res.status(204).end();
+}
+
+export async function ChangePasswordHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  assertTrustedOrigin(req);
+
+  const parsed = ChangePasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) throw validationError(parsed.error.issues);
+  if (!req.auth) throw new UnauthorizedError("Authentication required");
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.auth.userId },
+    select: { id: true, passwordHash: true, status: true },
+  });
+
+  if (!user || user.status !== "ACTIVE")
+    throw new UnauthorizedError("Authentication required");
+
+  if (!(await checkPassword(parsed.data.currentPassword, user.passwordHash))) {
+    throw new UnauthorizedError("Current password is incorrect");
+  }
+
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+    await tx.refreshToken.deleteMany({ where: { userId: user.id } });
+  });
+
+  clearRefreshCookie(res);
+  res.status(200).json({
+    message: "Password changed. Please sign in again on your other devices.",
+  });
 }
