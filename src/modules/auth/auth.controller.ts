@@ -5,6 +5,7 @@ import {
   ChangePasswordSchema,
   LoginSchema,
   RegisterSchema,
+  StudentProfileSchema,
 } from "./auth.schema.js";
 import { ConflictError, UnauthorizedError } from "../../core/CustomError.js";
 import { hashPassword, checkPassword } from "../../lib/hash.js";
@@ -281,4 +282,65 @@ export async function GetCurrentUserHandler(
     throw new UnauthorizedError("Authentication required");
 
   res.status(200).json({ user });
+}
+
+export async function CreateStudentProfileHandler(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  if (!req.auth) throw new UnauthorizedError("Authentication required");
+
+  const parsed = StudentProfileSchema.safeParse(req.body);
+  if (!parsed.success) throw validationError(parsed.error.issues);
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.auth.userId },
+    select: { id: true, status: true },
+  });
+  if (!user || user.status !== "ACTIVE")
+    throw new UnauthorizedError("Authentication required");
+
+  try {
+    const student = await prisma.student.create({
+      data: {
+        userId: user.id,
+        fullName: parsed.data.fullName,
+        dateOfBirth: new Date(`${parsed.data.dateOfBirth}T00:00:00.000Z`),
+        guardianPhone: parsed.data.guardianPhone,
+        woreda: parsed.data.woreda,
+        area: parsed.data.area,
+        currentStatus: parsed.data.currentStatus,
+        attendedPreviousSchool: parsed.data.attendedPreviousSchool,
+        previousSchoolName: parsed.data.previousSchoolName,
+        evidenceImageUrl: parsed.data.evidenceImageUrl,
+        evidenceStorageKey: parsed.data.evidenceStorageKey,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        dateOfBirth: true,
+        guardianPhone: true,
+        woreda: true,
+        area: true,
+        currentStatus: true,
+        attendedPreviousSchool: true,
+        previousSchoolName: true,
+        evidenceImageUrl: true,
+        membershipStatus: true,
+        registrationDate: true,
+      },
+    });
+
+    res.status(201).json({
+      message: "Student profile submitted for review",
+      student,
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    )
+      throw new ConflictError("A student profile already exists for this user");
+    throw error;
+  }
 }

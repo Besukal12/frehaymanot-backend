@@ -6,6 +6,7 @@ import {
   LogoutHandler,
   ChangePasswordHandler,
   GetCurrentUserHandler,
+  CreateStudentProfileHandler,
 } from "./auth.controller.js";
 import { requireAuth } from "../../middleware/auth.middleware.js";
 
@@ -17,5 +18,6 @@ authRouter.post("/refresh", RefreshTokenHandler);
 authRouter.post("/logout", LogoutHandler);
 authRouter.post("/change-password", requireAuth, ChangePasswordHandler);
 authRouter.get("/me", requireAuth, GetCurrentUserHandler);
+authRouter.post("/me/profile", requireAuth, CreateStudentProfileHandler);
 
 export default authRouter;
